@@ -11,6 +11,7 @@ use common_planners::AggregatorPartialPlan;
 use common_planners::ExpressionPlan;
 use common_planners::FilterPlan;
 use common_planners::HavingPlan;
+use common_planners::JoinPlan;
 use common_planners::LimitPlan;
 use common_planners::PlanNode;
 use common_planners::ProjectionPlan;
@@ -27,12 +28,14 @@ use crate::pipelines::transforms::FilterTransform;
 use crate::pipelines::transforms::GroupByFinalTransform;
 use crate::pipelines::transforms::GroupByPartialTransform;
 use crate::pipelines::transforms::LimitTransform;
+use crate::pipelines::transforms::NestedLoopJoinTransform;
 use crate::pipelines::transforms::ProjectionTransform;
 use crate::pipelines::transforms::RemoteTransform;
 use crate::pipelines::transforms::SortMergeTransform;
 use crate::pipelines::transforms::SortPartialTransform;
 use crate::pipelines::transforms::SourceTransform;
 use crate::planners::PlanScheduler;
+use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 
 pub struct PipelineBuilder {
@@ -42,60 +45,46 @@ pub struct PipelineBuilder {
 
 impl PipelineBuilder {
     pub fn create(ctx: FuseQueryContextRef, plan: PlanNode) -> Self {
-        PipelineBuilder { ctx, plan }
+        PipelineBuilder {
+            ctx: ctx.clone(),
+            plan
+        }
     }
 
     pub fn build(&self) -> Result<Pipeline> {
         info!("Received for plan:\n{:?}", self.plan);
 
-        let mut limit = None;
-        self.plan.walk_preorder(|node| -> Result<bool> {
-            match node {
-                PlanNode::Limit(ref limit_plan) => {
-                    limit = Some(limit_plan.n);
-                    Ok(true)
-                }
-                _ => Ok(true)
-            }
-        })?;
-
         let mut pipeline = Pipeline::create(self.ctx.clone());
-        self.plan.walk_postorder(|node| -> Result<bool> {
-            match node {
-                PlanNode::Select(_) => Ok(true),
-                PlanNode::Stage(plan) => self.visit_stage_plan(&mut pipeline, &plan),
-                PlanNode::Expression(plan) => {
-                    PipelineBuilder::visit_expression_plan(&mut pipeline, plan)
-                }
-                PlanNode::Projection(plan) => {
-                    PipelineBuilder::visit_projection_plan(&mut pipeline, plan)
-                }
-                PlanNode::AggregatorPartial(plan) => {
-                    PipelineBuilder::visit_aggregator_partial_plan(&mut pipeline, plan)
-                }
-                PlanNode::AggregatorFinal(plan) => {
-                    PipelineBuilder::visit_aggregator_final_plan(&mut pipeline, plan)
-                }
-                PlanNode::Filter(plan) => PipelineBuilder::visit_filter_plan(&mut pipeline, plan),
-                PlanNode::Having(plan) => PipelineBuilder::visit_having_plan(&mut pipeline, plan),
-                PlanNode::Sort(plan) => {
-                    PipelineBuilder::visit_sort_plan(limit, &mut pipeline, plan)
-                }
-                PlanNode::Limit(plan) => PipelineBuilder::visit_limit_plan(&mut pipeline, plan),
-                PlanNode::ReadSource(plan) => self.visit_read_data_source_plan(&mut pipeline, plan),
-                other => Result::Err(ErrorCodes::UnknownPlan(format!(
-                    "Build pipeline from the plan node unsupported:{:?}",
-                    other.name()
-                )))
-            }
-        })?;
+        self.build_impl(&mut pipeline, &self.plan.clone())?;
         info!("Pipeline:\n{:?}", pipeline);
 
         Ok(pipeline)
     }
 
-    fn visit_stage_plan(&self, pipeline: &mut Pipeline, plan: &&StagePlan) -> Result<bool> {
-        let executors = PlanScheduler::reschedule(self.ctx.clone(), &plan.input.as_ref())?;
+    fn build_impl(&self, pipeline: &mut Pipeline, plan: &PlanNode) -> Result<()> {
+        match plan {
+            PlanNode::Select(plan) => self.build_impl(pipeline, &plan.input),
+            PlanNode::Stage(plan) => self.build_stage_plan(pipeline, plan),
+            PlanNode::Expression(plan) => self.build_expression_plan(pipeline, plan),
+            PlanNode::Projection(plan) => self.build_projection_plan(pipeline, plan),
+            PlanNode::AggregatorPartial(plan) => self.build_aggregator_partial_plan(pipeline, plan),
+            PlanNode::AggregatorFinal(plan) => self.build_aggregator_final_plan(pipeline, plan),
+            PlanNode::Filter(plan) => self.build_filter_plan(pipeline, plan),
+            PlanNode::Having(plan) => self.build_having_plan(pipeline, plan),
+            PlanNode::Sort(plan) => self.build_sort_plan(pipeline, plan),
+            PlanNode::Limit(plan) => self.build_limit_plan(pipeline, plan),
+            PlanNode::ReadSource(plan) => self.build_read_data_source_plan(pipeline, plan),
+            PlanNode::Join(plan) => self.build_join_plan(pipeline, plan),
+            other => Result::Err(ErrorCodes::UnknownPlan(format!(
+                "Build pipeline from the plan node unsupported:{:?}",
+                other.name()
+            )))
+        }
+    }
+
+    fn build_stage_plan(&self, pipeline: &mut Pipeline, plan: &StagePlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
+        let executors = PlanScheduler::reschedule(self.ctx.clone(), plan.input.as_ref())?;
 
         // If the executors is not empty.
         if !executors.is_empty() {
@@ -114,10 +103,11 @@ impl PipelineBuilder {
                 pipeline.add_source(Arc::new(remote_transform))?;
             }
         }
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_expression_plan(pipeline: &mut Pipeline, plan: &ExpressionPlan) -> Result<bool> {
+    fn build_expression_plan(&self, pipeline: &mut Pipeline, plan: &ExpressionPlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ExpressionTransform::try_create(
                 plan.input.schema(),
@@ -125,10 +115,11 @@ impl PipelineBuilder {
                 plan.exprs.clone()
             )?))
         })?;
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_projection_plan(pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<bool> {
+    fn build_projection_plan(&self, pipeline: &mut Pipeline, plan: &ProjectionPlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(ProjectionTransform::try_create(
                 plan.input.schema(),
@@ -136,13 +127,15 @@ impl PipelineBuilder {
                 plan.expr.clone()
             )?))
         })?;
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_aggregator_partial_plan(
+    fn build_aggregator_partial_plan(
+        &self,
         pipeline: &mut Pipeline,
         plan: &AggregatorPartialPlan
-    ) -> Result<bool> {
+    ) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         if plan.group_expr.is_empty() {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(AggregatorPartialTransform::try_create(
@@ -159,13 +152,15 @@ impl PipelineBuilder {
                 )))
             })?;
         }
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_aggregator_final_plan(
+    fn build_aggregator_final_plan(
+        &self,
         pipeline: &mut Pipeline,
         plan: &AggregatorFinalPlan
-    ) -> Result<bool> {
+    ) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         pipeline.merge_processor()?;
         if plan.group_expr.is_empty() {
             pipeline.add_simple_transform(|| {
@@ -183,10 +178,11 @@ impl PipelineBuilder {
                 )))
             })?;
         }
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_filter_plan(pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<bool> {
+    fn build_filter_plan(&self, pipeline: &mut Pipeline, plan: &FilterPlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 plan.input.schema(),
@@ -194,10 +190,11 @@ impl PipelineBuilder {
                 false
             )?))
         })?;
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_having_plan(pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<bool> {
+    fn build_having_plan(&self, pipeline: &mut Pipeline, plan: &HavingPlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         pipeline.add_simple_transform(|| {
             Ok(Box::new(FilterTransform::try_create(
                 plan.input.schema(),
@@ -205,22 +202,18 @@ impl PipelineBuilder {
                 true
             )?))
         })?;
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_sort_plan(
-        limit: Option<usize>,
-        pipeline: &mut Pipeline,
-        plan: &SortPlan
-    ) -> Result<bool> {
+    fn build_sort_plan(&self, pipeline: &mut Pipeline, plan: &SortPlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         // processor 1: block ---> sort_stream
         // processor 2: block ---> sort_stream
         // processor 3: block ---> sort_stream
         pipeline.add_simple_transform(|| {
             Ok(Box::new(SortPartialTransform::try_create(
                 plan.schema(),
-                plan.order_by.clone(),
-                limit
+                plan.order_by.clone()
             )?))
         })?;
 
@@ -230,8 +223,7 @@ impl PipelineBuilder {
         pipeline.add_simple_transform(|| {
             Ok(Box::new(SortMergeTransform::try_create(
                 plan.schema(),
-                plan.order_by.clone(),
-                limit
+                plan.order_by.clone()
             )?))
         })?;
 
@@ -245,25 +237,25 @@ impl PipelineBuilder {
             pipeline.add_simple_transform(|| {
                 Ok(Box::new(SortMergeTransform::try_create(
                     plan.schema(),
-                    plan.order_by.clone(),
-                    limit
+                    plan.order_by.clone()
                 )?))
             })?;
         }
-        Ok(true)
+        Ok(())
     }
 
-    fn visit_limit_plan(pipeline: &mut Pipeline, plan: &LimitPlan) -> Result<bool> {
+    fn build_limit_plan(&self, pipeline: &mut Pipeline, plan: &LimitPlan) -> Result<()> {
+        self.build_impl(pipeline, &plan.input)?;
         pipeline.merge_processor()?;
         pipeline.add_simple_transform(|| Ok(Box::new(LimitTransform::try_create(plan.n)?)))?;
-        Ok(false)
+        Ok(())
     }
 
-    fn visit_read_data_source_plan(
+    fn build_read_data_source_plan(
         &self,
         pipeline: &mut Pipeline,
         plan: &ReadDataSourcePlan
-    ) -> Result<bool> {
+    ) -> Result<()> {
         // Bind plan partitions to context.
         self.ctx.try_set_partitions(plan.partitions.clone())?;
 
@@ -284,6 +276,29 @@ impl PipelineBuilder {
             )?;
             pipeline.add_source(Arc::new(source))?;
         }
-        Ok(true)
+        Ok(())
+    }
+
+    fn build_join_plan(&self, pipeline: &mut Pipeline, plan: &JoinPlan) -> Result<()> {
+        // Build left pipeline
+        let left_pipeline_builder =
+            PipelineBuilder::create(FuseQueryContext::try_create()?, (*plan.left_input).clone());
+        let mut left_pipeline = left_pipeline_builder.build()?;
+        left_pipeline.merge_processor()?;
+        // Build right pipeline
+        let right_pipeline_builder =
+            PipelineBuilder::create(FuseQueryContext::try_create()?, (*plan.right_input).clone());
+        let mut right_pipeline = right_pipeline_builder.build()?;
+        right_pipeline.merge_processor()?;
+
+        let join = NestedLoopJoinTransform::try_create(
+            self.ctx.clone(),
+            plan.schema().clone(),
+            Arc::from(left_pipeline.last_pipe()?.processor_by_index(0)),
+            Arc::from(right_pipeline.last_pipe()?.processor_by_index(0))
+        )?;
+
+        pipeline.add_source(Arc::new(join))?;
+        Ok(())
     }
 }

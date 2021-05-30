@@ -34,6 +34,8 @@ use common_planners::UseDatabasePlan;
 use common_planners::VarValue;
 use sqlparser::ast::Expr;
 use sqlparser::ast::FunctionArg;
+// use sqlparser::ast::JoinConstraint;
+// use sqlparser::ast::JoinOperator;
 use sqlparser::ast::Ident;
 use sqlparser::ast::ObjectName;
 use sqlparser::ast::OrderByExpr;
@@ -526,8 +528,45 @@ impl PlanParser {
         match from.len() {
             0 => self.plan_with_dummy_source(),
             1 => self.plan_table_with_joins(&from[0]),
-            _ => Result::Err(ErrorCodes::SyntaxException("Cannot support JOIN clause"))
+            _ => self.plan_joins(from)
         }
+    }
+
+    fn plan_joins(&self, table_references: &[sqlparser::ast::TableWithJoins]) -> Result<PlanNode> {
+        let mut joins = Vec::<PlanNode>::new();
+        for table_reference in table_references {
+            joins.push(self.plan_join(table_reference)?);
+        }
+        let mut builder = PlanBuilder::from(&joins[0]);
+        for i in 1..joins.len() {
+            builder = builder.join(&[], &joins[i])?;
+        }
+        builder.build()
+    }
+
+    fn plan_join(&self, table_reference: &sqlparser::ast::TableWithJoins) -> Result<PlanNode> {
+        let mut joined_table = self.create_relation(&table_reference.relation)?;
+        // This is a hack that we just simply merge the schemas of joined tables into one
+        // so we can build join condition with it.
+        let mut schema = (*joined_table.schema()).clone();
+        for join in table_reference.joins.iter() {
+            let right_table = self.create_relation(&join.relation)?;
+            schema = DataSchema::try_merge(vec![schema, (*right_table.schema()).clone()])?;
+            // Note that schema of current right table and merged left tables is enough to build condition expression.
+            // let condition = match &join.join_operator {
+            //     JoinOperator::Inner(constraint) => match constraint {
+            //         JoinConstraint::On(condition) => self.sql_to_rex(condition, &schema),
+            //         _ => Result::Err(ErrorCodes::SyntexException("Unsupported USING clause"))
+            //     },
+            //     _ => Result::Err(ErrorCodes::SyntexException("Unsupported JOIN type"))
+            // }?;
+
+            joined_table = PlanBuilder::from(&joined_table)
+                .join(&[], &right_table)?
+                .build()?;
+        }
+
+        Ok(joined_table)
     }
 
     fn plan_with_dummy_source(&self) -> Result<PlanNode> {

@@ -52,6 +52,7 @@ mod plan_expression_validator;
 mod plan_expression_visitor;
 mod plan_filter;
 mod plan_having;
+mod plan_join;
 mod plan_insert_into;
 mod plan_limit;
 mod plan_node;

@@ -46,6 +46,7 @@ mod transform_expression_executor;
 mod transform_filter;
 mod transform_groupby_final;
 mod transform_groupby_partial;
+mod transform_join;
 mod transform_limit;
 mod transform_projection;
 mod transform_remote;

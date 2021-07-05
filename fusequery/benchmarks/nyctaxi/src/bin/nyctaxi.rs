@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use common_datavalues::DataField;
@@ -15,6 +16,7 @@ use common_planners::TableEngineType;
 use common_planners::TableOptions;
 use common_runtime::tokio;
 use fuse_query::configs::Config;
+use fuse_query::datasources::DataSource;
 use fuse_query::interpreters::InterpreterFactory;
 use fuse_query::optimizers::Optimizers;
 use fuse_query::sessions::FuseQueryContext;
@@ -42,7 +44,8 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
-    let ctx = FuseQueryContext::try_create(Config::default())?;
+    let datasource = Arc::new(DataSource::try_create()?);
+    let ctx = FuseQueryContext::try_create(Config::default(), datasource)?;
     if opt.threads > 0 {
         ctx.set_max_threads(opt.threads as u64)?;
     }

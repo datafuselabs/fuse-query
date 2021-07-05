@@ -45,14 +45,14 @@ pub struct FuseQueryContext {
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
+    pub fn try_create(conf: Config, datasource: Arc<DataSource>) -> Result<FuseQueryContextRef> {
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create()?),
+            datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),

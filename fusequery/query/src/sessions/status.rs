@@ -14,7 +14,7 @@ use futures::future::AbortHandle;
 
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::DatabaseCatalog;
 use crate::sessions::FuseQueryContext;
 use crate::sessions::FuseQueryContextRef;
 use crate::sessions::Settings;
@@ -82,7 +82,7 @@ impl SessionStatus {
         &mut self,
         conf: Config,
         cluster: ClusterRef,
-        datasource: Arc<DataSource>,
+        datasource: Arc<DatabaseCatalog>,
     ) -> Result<FuseQueryContextRef> {
         FuseQueryContext::from_settings(
             conf,

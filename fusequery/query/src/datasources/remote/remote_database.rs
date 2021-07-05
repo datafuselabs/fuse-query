@@ -9,6 +9,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
+use common_planners::DatabaseEngineType;
 use common_planners::DropTablePlan;
 use common_store_api::MetaApi;
 
@@ -40,8 +41,8 @@ impl Database for RemoteDatabase {
         self.name.as_str()
     }
 
-    fn engine(&self) -> &str {
-        "remote"
+    fn engine(&self) -> DatabaseEngineType {
+        DatabaseEngineType::Remote
     }
 
     fn is_local(&self) -> bool {

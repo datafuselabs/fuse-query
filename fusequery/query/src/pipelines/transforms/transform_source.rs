@@ -58,14 +58,11 @@ impl Processor for SourceTransform {
             remote
         );
 
-        let table = if remote {
-            self.ctx
-                .get_remote_table(db.as_str(), table.as_str())
-                .await?
-        } else {
-            self.ctx.get_table(db.as_str(), table.as_str())?
-        };
+        let storage = self
+            .ctx
+            .get_catalog()
+            .get_storage(self.source_plan.remote, &db, &table)?;
 
-        table.read(self.ctx.clone(), &self.source_plan).await
+        storage.sread(self.ctx.clone(), &self.source_plan).await
     }
 }

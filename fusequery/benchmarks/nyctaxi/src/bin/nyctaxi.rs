@@ -16,7 +16,7 @@ use common_planners::TableEngineType;
 use common_planners::TableOptions;
 use common_runtime::tokio;
 use fuse_query::configs::Config;
-use fuse_query::datasources::DataSource;
+use fuse_query::datasources::DatabaseCatalog;
 use fuse_query::interpreters::InterpreterFactory;
 use fuse_query::optimizers::Optimizers;
 use fuse_query::sessions::FuseQueryContext;
@@ -44,7 +44,7 @@ struct Opt {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = Opt::from_args();
-    let datasource = Arc::new(DataSource::try_create()?);
+    let datasource = Arc::new(DatabaseCatalog::try_create()?);
     let ctx = FuseQueryContext::try_create(Config::default(), datasource)?;
     if opt.threads > 0 {
         ctx.set_max_threads(opt.threads as u64)?;
@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Create csv table.
-    let data_source = ctx.get_datasource();
+    let data_source = ctx.get_catalog();
     let database = data_source.get_database("default")?;
     let mut options: TableOptions = HashMap::new();
     options.insert("has_header".to_string(), "true".to_string());

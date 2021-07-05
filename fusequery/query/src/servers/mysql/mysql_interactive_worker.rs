@@ -197,15 +197,12 @@ impl<W: std::io::Write> InteractiveWorkerBase<W> {
 
     fn do_init(&mut self, database_name: &str) -> Result<()> {
         let context = self.session.try_create_context()?;
-        context
-            .get_datasource()
-            .get_database(database_name)
-            .map(|_| {
-                self.session
-                    .get_status()
-                    .lock()
-                    .update_database(database_name.to_string());
-            })
+        context.get_catalog().get_database(database_name).map(|_| {
+            self.session
+                .get_status()
+                .lock()
+                .update_database(database_name.to_string());
+        })
     }
 
     fn build_runtime() -> Result<tokio::runtime::Runtime> {

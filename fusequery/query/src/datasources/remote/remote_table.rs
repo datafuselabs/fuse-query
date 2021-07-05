@@ -19,6 +19,7 @@ use common_store_api::ReadPlanResult;
 use common_store_api::StorageApi;
 use common_streams::SendableDataBlockStream;
 
+use crate::datasources::datasource::TableStorage;
 use crate::datasources::remote::StoreClientProvider;
 use crate::datasources::Table;
 use crate::sessions::FuseQueryContextRef;
@@ -46,6 +47,46 @@ impl RemoteTable {
             store_client_provider,
         };
         Ok(Box::new(table))
+    }
+}
+
+pub struct RemoteTableStorage {
+    pub(crate) store_client_provider: StoreClientProvider,
+}
+
+impl RemoteTableStorage {
+    pub fn new(store_client_provider: StoreClientProvider) -> Self {
+        RemoteTableStorage {
+            store_client_provider,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl TableStorage for RemoteTableStorage {
+    async fn sread_plan(
+        &self,
+        ctx: FuseQueryContextRef,
+        scan: &ScanPlan,
+        partitions: usize,
+    ) -> Result<ReadDataSourcePlan> {
+        todo!()
+    }
+
+    async fn sread(
+        &self,
+        ctx: FuseQueryContextRef,
+        source_plan: &ReadDataSourcePlan,
+    ) -> Result<SendableDataBlockStream> {
+        RemoteTable::do_read(self.store_client_provider.clone(), ctx, source_plan).await
+    }
+
+    async fn sappend_data(
+        &self,
+        _ctx: FuseQueryContextRef,
+        _insert_plan: InsertIntoPlan,
+    ) -> Result<()> {
+        todo!()
     }
 }
 
@@ -110,7 +151,7 @@ impl Table for RemoteTable {
         ctx: FuseQueryContextRef,
         source_plan: &ReadDataSourcePlan,
     ) -> Result<SendableDataBlockStream> {
-        self.do_read(ctx, source_plan).await
+        RemoteTable::do_read(self.store_client_provider.clone(), ctx, source_plan).await
     }
 
     async fn append_data(&self, _ctx: FuseQueryContextRef, plan: InsertIntoPlan) -> Result<()> {
@@ -131,15 +172,6 @@ impl Table for RemoteTable {
                     block_stream,
                 )
                 .await?;
-
-            //            let mut um = UserMgr::new(client);
-            //            let a = "test";
-            //            um.get_users(&vec![a]).await;
-            //            um.add_user("user", "pass", "salt").await;
-            //            um.drop_user("user", None).await;
-            //            um.update_user("user", None, None, None).await;
-            //            um.get_users(&vec!["user"]).await;
-            //            um.get_all_users().await;
         }
 
         Ok(())

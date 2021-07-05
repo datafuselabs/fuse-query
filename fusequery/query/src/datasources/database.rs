@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_planners::CreateTablePlan;
+use common_planners::DatabaseEngineType;
 use common_planners::DropTablePlan;
 
 use crate::datasources::Table;
@@ -15,7 +16,7 @@ use crate::datasources::TableFunction;
 pub trait Database: Sync + Send {
     /// Database name.
     fn name(&self) -> &str;
-    fn engine(&self) -> &str;
+    fn engine(&self) -> DatabaseEngineType;
     fn is_local(&self) -> bool;
 
     /// Get one table by name.

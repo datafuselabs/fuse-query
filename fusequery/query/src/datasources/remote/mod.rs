@@ -10,4 +10,5 @@ mod store_client_provider;
 pub use remote_database::RemoteDatabase;
 pub use remote_factory::RemoteFactory;
 pub use remote_table::RemoteTable;
+pub use remote_table::RemoteTableStorage;
 pub use store_client_provider::StoreClientProvider;

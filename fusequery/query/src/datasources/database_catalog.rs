@@ -2,11 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0.
 
-use std::any::Any;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_datavalues::DataSchemaRef;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
@@ -26,7 +26,7 @@ use crate::datasources::local::LocalDatabase;
 use crate::datasources::local::LocalFactory;
 use crate::datasources::remote::RemoteDatabase;
 use crate::datasources::remote::RemoteFactory;
-use crate::datasources::remote::RemoteTable;
+
 use crate::datasources::remote::RemoteTableStorage;
 use crate::datasources::system::SystemFactory;
 use crate::datasources::Database;

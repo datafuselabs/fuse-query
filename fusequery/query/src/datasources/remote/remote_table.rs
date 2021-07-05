@@ -66,9 +66,9 @@ impl RemoteTableStorage {
 impl TableStorage for RemoteTableStorage {
     async fn sread_plan(
         &self,
-        ctx: FuseQueryContextRef,
-        scan: &ScanPlan,
-        partitions: usize,
+        _ctx: FuseQueryContextRef,
+        _scan: &ScanPlan,
+        _partitions: usize,
     ) -> Result<ReadDataSourcePlan> {
         todo!()
     }

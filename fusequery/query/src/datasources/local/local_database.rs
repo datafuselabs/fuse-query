@@ -9,6 +9,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_infallible::RwLock;
 use common_planners::CreateTablePlan;
+use common_planners::DatabaseEngineType;
 use common_planners::DropTablePlan;
 use common_planners::TableEngineType;
 
@@ -37,8 +38,8 @@ impl Database for LocalDatabase {
         "local"
     }
 
-    fn engine(&self) -> &str {
-        "local"
+    fn engine(&self) -> DatabaseEngineType {
+        DatabaseEngineType::Local
     }
 
     fn is_local(&self) -> bool {

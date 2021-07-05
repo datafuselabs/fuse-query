@@ -13,6 +13,8 @@ use common_planners::Extras;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;
 
+use crate::datasources::Catalog;
+use crate::datasources::DatabaseCatalog;
 use crate::pipelines::transforms::SourceTransform;
 use crate::sessions::FuseQueryContextRef;
 
@@ -32,13 +34,13 @@ impl NumberTestData {
     }
 
     pub fn number_schema_for_test(&self) -> Result<DataSchemaRef> {
-        let datasource = crate::datasources::DataSource::try_create()?;
+        let datasource = DatabaseCatalog::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.schema()
     }
 
     pub fn number_read_source_plan_for_test(&self, numbers: i64) -> Result<ReadDataSourcePlan> {
-        let datasource = crate::datasources::DataSource::try_create()?;
+        let datasource = DatabaseCatalog::try_create()?;
         let table = datasource.get_table(self.db, self.table)?;
         table.read_plan(
             self.ctx.clone(),

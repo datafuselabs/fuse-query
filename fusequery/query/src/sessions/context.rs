@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterRef;
 use crate::configs::Config;
-use crate::datasources::DataSource;
+use crate::datasources::Catalog;
 use crate::datasources::Table;
 use crate::datasources::TableFunction;
 use crate::sessions::Settings;
@@ -33,7 +33,7 @@ pub struct FuseQueryContext {
     uuid: Arc<RwLock<String>>,
     settings: Arc<Settings>,
     cluster: Arc<RwLock<ClusterRef>>,
-    datasource: Arc<DataSource>,
+    catalog: Arc<dyn Catalog>,
     statistics: Arc<RwLock<Statistics>>,
     partition_queue: Arc<RwLock<VecDeque<Part>>>,
     current_database: Arc<RwLock<String>>,
@@ -45,14 +45,14 @@ pub struct FuseQueryContext {
 pub type FuseQueryContextRef = Arc<FuseQueryContext>;
 
 impl FuseQueryContext {
-    pub fn try_create(conf: Config) -> Result<FuseQueryContextRef> {
+    pub fn try_create(conf: Config, datasource: Arc<dyn Catalog>) -> Result<FuseQueryContextRef> {
         let settings = Settings::try_create()?;
         let ctx = FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource: Arc::new(DataSource::try_create()?),
+            catalog: datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(String::from("default"))),
@@ -73,14 +73,14 @@ impl FuseQueryContext {
         conf: Config,
         settings: Arc<Settings>,
         default_database: String,
-        datasource: Arc<DataSource>,
+        datasource: Arc<dyn Catalog>,
     ) -> Result<FuseQueryContextRef> {
         Ok(Arc::new(FuseQueryContext {
             conf,
             uuid: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             settings: settings.clone(),
             cluster: Arc::new(RwLock::new(Cluster::empty())),
-            datasource,
+            catalog: datasource,
             statistics: Arc::new(RwLock::new(Statistics::default())),
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             current_database: Arc::new(RwLock::new(default_database)),
@@ -184,29 +184,16 @@ impl FuseQueryContext {
         Ok(cluster.clone())
     }
 
-    pub fn get_datasource(&self) -> Arc<DataSource> {
-        self.datasource.clone()
+    pub fn get_catalog(&self) -> Arc<dyn Catalog> {
+        self.catalog.clone()
     }
 
     pub fn get_table(&self, db_name: &str, table_name: &str) -> Result<Arc<dyn Table>> {
-        self.datasource.get_table(db_name, table_name)
-    }
-
-    // This is an adhoc solution for the metadata syncing problem, far from elegant. let's tweak this later.
-    //
-    // The reason of not extending IDataSource::get_table (e.g. by adding a remote_hint parameter):
-    // Implementation of fetching remote table involves async operations which is not
-    // straight forward (but not infeasible) to do in a non-async method.
-    pub async fn get_remote_table(
-        &self,
-        db_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.datasource.get_remote_table(db_name, table_name).await
+        self.catalog.get_table(db_name, table_name)
     }
 
     pub fn get_table_function(&self, function_name: &str) -> Result<Arc<dyn TableFunction>> {
-        self.datasource.get_table_function(function_name)
+        self.catalog.get_table_function(function_name)
     }
 
     pub fn get_id(&self) -> String {
@@ -218,7 +205,7 @@ impl FuseQueryContext {
     }
 
     pub fn set_current_database(&self, new_database_name: String) -> Result<()> {
-        self.datasource
+        self.catalog
             .get_database(new_database_name.as_str())
             .map(|_| {
                 *self.current_database.write() = new_database_name.to_string();

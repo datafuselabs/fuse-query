@@ -64,7 +64,7 @@ impl ScattersOptimizer {
     ) -> Result<PlanNode> {
         let read_table = self
             .ctx
-            .get_datasource()
+            .get_catalog()
             .get_table(plan.db.as_str(), plan.table.as_str())?;
 
         let settings = self.ctx.get_settings();

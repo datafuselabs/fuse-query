@@ -8,6 +8,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_planners::CreateTablePlan;
+use common_planners::DatabaseEngineType;
 use common_planners::DropTablePlan;
 
 use crate::datasources::system;
@@ -65,8 +66,8 @@ impl Database for SystemDatabase {
         "system"
     }
 
-    fn engine(&self) -> &str {
-        "local"
+    fn engine(&self) -> DatabaseEngineType {
+        DatabaseEngineType::Local
     }
 
     fn is_local(&self) -> bool {

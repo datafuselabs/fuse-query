@@ -7,7 +7,6 @@ use std::sync::Arc;
 use common_datavalues::DataSchema;
 use common_datavalues::DataSchemaRef;
 
-
 use crate::Extras;
 use crate::Partitions;
 use crate::ScanPlan;

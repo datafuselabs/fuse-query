@@ -8,7 +8,6 @@ use std::sync::Arc;
 use common_datablocks::DataBlock;
 use common_datavalues::DataSchemaRef;
 use common_exception::Result;
-
 use common_planners::Part;
 use common_planners::ReadDataSourcePlan;
 use common_planners::ScanPlan;

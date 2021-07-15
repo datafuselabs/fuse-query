@@ -805,6 +805,7 @@ name = "common-planners"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "common-arrow",
  "common-datablocks",
  "common-datavalues",
  "common-exception",

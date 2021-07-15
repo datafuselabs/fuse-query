@@ -96,8 +96,11 @@ impl Expression {
             }
             Expression::Cast { expr, .. } => expr.accept(visitor),
             Expression::Sort { expr, .. } => expr.accept(visitor),
-
-            _ => Ok(visitor),
+            Expression::Column(_)
+            | Expression::Literal(_)
+            | Expression::Exists(_)
+            | Expression::InList { .. }
+            | Expression::Wildcard => Ok(visitor),
         }?;
 
         visitor.post_visit(self)

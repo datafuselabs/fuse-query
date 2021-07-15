@@ -29,6 +29,7 @@ use common_planners::DropDatabasePlan;
 use common_planners::DropTablePlan;
 use common_planners::ExplainPlan;
 use common_planners::Expression;
+use common_planners::InListExpr;
 use common_planners::InsertIntoPlan;
 use common_planners::PlanBuilder;
 use common_planners::PlanNode;
@@ -843,6 +844,21 @@ impl PlanParser {
             }),
             sqlparser::ast::Expr::Exists(q) => {
                 Ok(Expression::Exists(Arc::new(self.query_to_plan(q)?)))
+            }
+            sqlparser::ast::Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                let mut list_expr = vec![];
+                for item in list {
+                    list_expr.push(self.sql_to_rex(item, schema, select)?);
+                }
+                Ok(Expression::InList(InListExpr::new(
+                    Box::new(self.sql_to_rex(expr, schema, select)?),
+                    list_expr,
+                    *negated,
+                )))
             }
             sqlparser::ast::Expr::Nested(e) => self.sql_to_rex(e, schema, select),
             sqlparser::ast::Expr::CompoundIdentifier(ids) => {

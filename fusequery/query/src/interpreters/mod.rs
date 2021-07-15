@@ -22,8 +22,6 @@ mod interpreter_table_create_test;
 mod interpreter_table_drop_test;
 #[cfg(test)]
 mod interpreter_use_database_test;
-#[cfg(test)]
-mod plan_scheduler_test;
 
 mod interpreter;
 mod interpreter_database_create;
@@ -38,7 +36,6 @@ mod interpreter_show_create_table;
 mod interpreter_table_create;
 mod interpreter_table_drop;
 mod interpreter_use_database;
-mod plan_scheduler;
 
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;

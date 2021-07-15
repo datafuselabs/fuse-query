@@ -313,6 +313,12 @@ impl From<std::io::Error> for ErrorCode {
     }
 }
 
+impl From<ureq::Error> for ErrorCode {
+    fn from(error: ureq::Error) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<std::net::AddrParseError> for ErrorCode {
     fn from(error: AddrParseError) -> Self {
         ErrorCode::BadAddressFormat(format!("Bad address format, cause: {}", error))

@@ -26,7 +26,7 @@ anyhow = "1.0.42"
 futures = "0.3"
 jwt-simple = "0.10.1"
 log = "0.4"
-prost = "0.7"
+prost = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio-stream = "0.1"
